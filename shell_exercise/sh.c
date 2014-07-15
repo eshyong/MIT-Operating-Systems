@@ -43,7 +43,7 @@ struct cmd *parsecmd(char*);
 void
 runcmd(struct cmd *cmd)
 {
-    int p[2], status, pid;
+    int p[2], status, pid, fd;
     struct execcmd *ecmd = (struct execcmd *)cmd;
     struct pipecmd *pcmd = (struct pipecmd *)cmd;
     struct redircmd *rcmd = (struct redircmd *)cmd;
@@ -63,20 +63,11 @@ runcmd(struct cmd *cmd)
         execvp(ecmd->argv[0], ecmd->argv);
         break;
     case '>':
-        // Redirect stdout to a file. This replaces the stdout file descriptor with
-        // the fd of the text file to write to.
-        rcmd->fd = open(rcmd->file, rcmd->mode);
-        dup2(rcmd->fd, STDOUT_FILENO);
-        runcmd(rcmd->cmd);
-        close(rcmd->fd);
-        break;
     case '<':
-        // Redirect stdin to a file. This replaces the stdin file descriptor with
-        // the fd of the text file to be read from.
-        rcmd->fd = open(rcmd->file, rcmd->mode);
-        dup2(rcmd->fd, STDIN_FILENO);
+        fd = open(rcmd->file, rcmd->mode);
+        dup2(fd, rcmd->fd);
+        close(fd);
         runcmd(rcmd->cmd);
-        close(rcmd->fd);
         break;
     case '|':
         // Create a pipe that holds an array of file descriptors. The first descriptor is
@@ -86,16 +77,16 @@ runcmd(struct cmd *cmd)
         pid = fork1();
         if (pid == 0) {
             // Replace stdout with write pipe
-            dup2(p[1], STDOUT_FILENO);
             close(p[0]);
+            dup2(p[1], STDOUT_FILENO);
             close(p[1]);
             runcmd(pcmd->left);
         } else if (pid > 0) {
             // Replace stdin with read pipe
             waitpid(pid, &status, 0);
+            close(p[1]);
             dup2(p[0], STDIN_FILENO);
             close(p[0]);
-            close(p[1]);
             runcmd(pcmd->right);
         }
         break;

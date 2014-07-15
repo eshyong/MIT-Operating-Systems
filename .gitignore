@@ -1,1 +1,4 @@
 *.swp
+shell_exercise/sh
+shell_exercise/*.txt
+xv6/
